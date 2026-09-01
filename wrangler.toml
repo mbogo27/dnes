@@ -11,7 +11,7 @@ DEV_MODE = "true"
 IP_SALT = "dev-local-salt-change-in-prod"
 # Keep in sync with seed/posts.json's length — /api/stats adds approved
 # submissions on top of this baseline (revision-spec §1.3, §6.2).
-SEED_COUNT = "37"
+SEED_COUNT = "58"
 
 [[d1_databases]]
 binding = "DB"
