@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build-seed.mjs",
-    "dev": "npm run build && wrangler pages dev public --local --port 8788",
+    "dev": "npm run build && wrangler dev --port 8788",
     "db:init": "wrangler d1 execute DB --local --file=schema/0001_init.sql",
     "kv:seed": "node scripts/seed-kv.mjs",
     "curate": "node scripts/curate.mjs"
