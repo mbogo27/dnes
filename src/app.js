@@ -1484,9 +1484,11 @@ let foundingSlotsLeft = FOUNDING_SLOTS_TOTAL; // updated from /api/stats when it
 
 const PANEL = {
   taskbee: () => `
-    <div class="p-head"><div class="p-eyebrow">Sponsor zero</div><button class="p-close" data-pclose aria-label="Close">&#10005;</button></div>
-    <h2 class="p-title">What Taskbee is</h2>
-    <p class="p-body">${esc(TASKBEE.line)} — that's the offer, and it's why Taskbee is a real, paying example on this wall right now. Taskbee sits outside the ten founding slots — it's proof the wall works, not one of them.</p>
+    <div class="p-head"><div class="p-eyebrow">Sponsored ad</div><button class="p-close" data-pclose aria-label="Close">&#10005;</button></div>
+    <h2 class="p-title">Taskbee</h2>
+    <p class="p-subtitle">${esc(TASKBEE.line)}</p>
+    <div class="p-banner"><img src="/taskbee-ecom-banner.png" alt="A Taskbee online storefront" loading="lazy"></div>
+    <p class="p-body">Move your catalog beyond WhatsApp and Instagram DMs. Launch a simple, fast online storefront for your business from KSh 10,000.</p>
     <a class="p-cta external" href="${TASKBEE.href}" target="_blank" rel="noopener">Visit ${TASKBEE.url} ↗</a>`,
   'claim-widget': () => `
     <div class="p-head"><div class="p-eyebrow">Claim a slot</div><button class="p-close" data-pclose aria-label="Close">&#10005;</button></div>
