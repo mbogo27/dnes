@@ -27,8 +27,8 @@ const injected = template
 mkdirSync(join(root, 'public'), { recursive: true });
 writeFileSync(join(root, 'public', 'index.html'), injected);
 copyFileSync(join(root, 'src', 'assets', 'dobaness-bg.jpg'), join(root, 'public', 'dobaness-bg.jpg'));
-copyFileSync(join(root, 'src', 'assets', 'taskbee-ecom-banner.png'), join(root, 'public', 'taskbee-ecom-banner.png'));
+copyFileSync(join(root, 'src', 'assets', 'taskbee-ecom-banner.webp'), join(root, 'public', 'taskbee-ecom-banner.webp'));
 
 console.log(`build-seed: inlined ${posts.length} posts -> public/index.html (${injected.length} bytes)`);
 console.log('build-seed: copied dobaness-bg.jpg -> public/');
-console.log('build-seed: copied taskbee-ecom-banner.png -> public/');
+console.log('build-seed: copied taskbee-ecom-banner.webp -> public/');
