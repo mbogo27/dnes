@@ -52,6 +52,20 @@ const GRAD_PAIRS = [
   ['#2B62F0', '#31D2F7'], ['#A855F7', '#FF6BCB'], ['#F43F5E', '#FB923C'],
   ['#0EA5E9', '#22D3EE'], ['#84CC16', '#FACC15'], ['#7C3AED', '#2563EB'],
 ];
+// Orange is reserved for actions (the CTA button) — the karibu splash and
+// the ambient bundle splashes pick from a non-orange subset instead
+// (intro patch v2.1 §1, §3).
+const NON_ORANGE_GRADS = [
+  ['#17A66E', '#8FE388'], ['#2B62F0', '#31D2F7'], ['#A855F7', '#FF6BCB'],
+  ['#0EA5E9', '#22D3EE'], ['#84CC16', '#FACC15'], ['#7C3AED', '#2563EB'],
+  ['#FFC531', '#FF6B9D'],
+];
+// Ambient splashes get a stricter cut — even the gold/pink pair above reads
+// a little warm next to the orange CTA ("avoid orange gradients here too").
+const AMBIENT_GRADS = [
+  ['#17A66E', '#8FE388'], ['#2B62F0', '#31D2F7'], ['#A855F7', '#FF6BCB'],
+  ['#0EA5E9', '#22D3EE'], ['#84CC16', '#22C55E'], ['#7C3AED', '#2563EB'],
+];
 const INK = '#16161A';
 const FONT_HEAVY = '"Arial Black","Archivo Black",Impact,sans-serif';
 const FONT_UI = '"Inter","Helvetica Neue",Helvetica,Arial,sans-serif';
@@ -1388,10 +1402,12 @@ const PANEL = {
     <button class="p-cta" data-goto="claim-form">Reserve a slot</button>`,
   'claim-form': () => `
     <div class="p-head"><div class="p-eyebrow">Claim a slot · ${foundingSlotsLeft} of ${FOUNDING_SLOTS_TOTAL} left</div><button class="p-close" data-pclose aria-label="Close">&#10005;</button></div>
-    <h2 class="p-title">Founding sponsor — ${FOUNDING_SLOTS_TOTAL} slots</h2>
-    <p class="p-body">KES 20,000 for 12 months, locked. Rate after launch: KES 5,000/month.<br><br>
-    Hold a slot with a KES 3,000 M-Pesa deposit — deducted from the fee, refunded in full if we don't launch by ${LAUNCH_DATE_HUMAN}.</p>
-    <p class="p-note">No payment on this form — this captures interest. We follow up on WhatsApp and take the deposit manually.</p>
+    <h2 class="p-title">We're looking for 10 founding sponsors.</h2>
+    <p class="p-body">KSh 20,000 for the first 12 months.<br>
+    After launch: KSh 5,000/month.<br>
+    Reserve with KSh 3,000.<br>
+    10 slots only.</p>
+    <p class="p-note">No payment on this form — this captures interest. We follow up on WhatsApp and take the deposit manually. Refundable in full if we don't launch by ${LAUNCH_DATE_HUMAN}.</p>
     <div class="field"><label for="cs-brand">Brand name</label><input id="cs-brand" maxlength="60" placeholder="Your brand"></div>
     <div class="field"><label for="cs-contact">Contact name</label><input id="cs-contact" maxlength="60" placeholder="Your name"></div>
     <div class="field"><label for="cs-wa">WhatsApp number</label><input id="cs-wa" type="tel" inputmode="tel" placeholder="07XX XXX XXX"><div class="field-err" id="cs-wa-err"></div></div>
@@ -1670,7 +1686,9 @@ function bootIntroDemo() {
   // a hardcoded size, so a differently-shaped blob tomorrow still fits.
   function fitDemoToBox() {
     bbox = blobBBox(introSplash.verts, introSplash.R);
-    const padding = iw >= 500 ? 80 : 24;
+    // Padding scales with the (now much smaller, 150/220px) box itself
+    // rather than a fixed px value tuned for the old 280/540px box.
+    const padding = Math.max(10, iw * 0.14);
     const availW = Math.max(20, iw - padding * 2), availH = Math.max(20, ih - padding * 2);
     scale = Math.min(availW / bbox.w, availH / bbox.h);
   }
@@ -1680,13 +1698,15 @@ function bootIntroDemo() {
     const rmin = Math.min(...verts.map(v => v.r));
     // boardMinDim=0: the intro box is its own world, not tied to the main
     // wall's radius floor — R here comes purely from the text fit.
-    const fit = fitTextToBlob(introCtx, 'karibu Dobaness', 'PRE-LAUNCH', '', rmin, 'short', 0);
+    // "karibu" alone — DOBANESS already appears as the wordmark below (§1).
+    const fit = fitTextToBlob(introCtx, 'karibu', 'PRE-LAUNCH', '', rmin, 'short', 0);
+    const grad = pick(NON_ORANGE_GRADS);
     introSplash = Object.assign(Object.create(Splash.prototype), {
       sid: -1, x: 0, y: 0, born: performance.now(), state: 'GROW', exitAt: 0,
       scale: 0, alpha: 1, phase: rand(TWO_PI), verts, gradAngle: rand(TWO_PI),
       hold: 1400, item: { type: 'post', data: { axis: 'other', handle: '', id: 'intro' } },
       reactedEmoji: null, dwellBonusGiven: true, holding: false, holdStartedAt: 0,
-      color: pick(PALETTE), grad: pick(GRAD_PAIRS), scene: null, isIntro: true,
+      color: grad[0], grad, scene: null, isIntro: true,
       drops: [],
       ...fit,
     });
@@ -1711,6 +1731,213 @@ function bootIntroDemo() {
     introRaf = requestAnimationFrame(loop);
   }
   introRaf = requestAnimationFrame(loop);
+
+  document.addEventListener('visibilitychange', () => {
+    if (!introShowing) return;
+    if (document.hidden) { if (introRaf) { cancelAnimationFrame(introRaf); introRaf = null; } }
+    else if (!introRaf) { introRaf = requestAnimationFrame(loop); }
+  });
+}
+
+/* ---------------------------------------------------------------------
+   AMBIENT BUNDLE SPLASHES — small, name-only splashes popping in the dark
+   margins around the intro column (intro patch v2.1 §3)
+--------------------------------------------------------------------- */
+const AMBIENT_FADE_IN_MS = 600, AMBIENT_FADE_OUT_MS = 800;
+const AMBIENT_MIN_SEP = 80, AMBIENT_CTA_MARGIN = 120;
+const ambientCanvas = document.getElementById('intro-ambient-canvas');
+const ambientCtx = ambientCanvas.getContext('2d');
+let ambientSplashes = [];
+let ambientRaf = null;
+let ambientLastSpawnAt = 0, ambientNextSpawnGap = 0;
+let ambientStaticBuilt = false;
+
+function ambientIsMobile() { return window.innerWidth < 720; }
+function ambientCap() { return ambientIsMobile() ? 2 : 4; }
+function ambientSizeRange() { return ambientIsMobile() ? [70, 100] : [90, 140]; }
+
+let ambientDeck = [], ambientDeckPos = 0;
+function buildAmbientDeck() { ambientDeck = shuffleArray(AXES.map(a => a.title)); ambientDeckPos = 0; }
+// Shuffle the six, walk in order, reshuffle at the end — guarantees all six
+// surface within the first cycle. Skip a name that's still live so the same
+// bundle is never shown twice at once.
+function nextAmbientName(liveNames) {
+  for (let tries = 0; tries < 12; tries++) {
+    if (ambientDeckPos >= ambientDeck.length) buildAmbientDeck();
+    const name = ambientDeck[ambientDeckPos++];
+    if (!liveNames.has(name)) return name;
+  }
+  return null;
+}
+
+function rectsOverlapAmbient(a, b) {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+// Hard exclusion: the text column (60ch measure) and a 120px halo around
+// the CTA — motion next to a button steals taps.
+function ambientExclusionRects() {
+  const col = document.querySelector('.intro-inner').getBoundingClientRect();
+  const btn = document.getElementById('intro-enter').getBoundingClientRect();
+  return [
+    { x: col.left, y: col.top, w: col.width, h: col.height },
+    {
+      x: btn.left - AMBIENT_CTA_MARGIN, y: btn.top - AMBIENT_CTA_MARGIN,
+      w: btn.width + AMBIENT_CTA_MARGIN * 2, h: btn.height + AMBIENT_CTA_MARGIN * 2,
+    },
+  ];
+}
+function findAmbientPlacement(R, exclusions, liveSplashes, vw, vh) {
+  for (let i = 0; i < 30; i++) {
+    const x = rand(R, Math.max(R + 1, vw - R)), y = rand(R, Math.max(R + 1, vh - R));
+    const candRect = { x: x - R, y: y - R, w: R * 2, h: R * 2 };
+    if (exclusions.some(r => rectsOverlapAmbient(r, candRect))) continue;
+    if (liveSplashes.some(s => Math.hypot(x - s.x, y - s.y) < s.R + R + AMBIENT_MIN_SEP)) continue;
+    return { x, y };
+  }
+  return null;
+}
+
+function fitAmbientText(c, name, R) {
+  const maxW = R * 1.35;
+  let fontPx = R * 0.22;
+  const minFontPx = Math.max(9, R * 0.1);
+  for (;;) {
+    c.font = heavyFont(fontPx);
+    if (c.measureText(name).width <= maxW || fontPx <= minFontPx) return { fontPx, lines: [name] };
+    const twoLine = wrapWordsToLines(c, name.split(/\s+/), 2);
+    const widest = Math.max(...twoLine.map(l => c.measureText(l).width));
+    if (widest <= maxW || fontPx <= minFontPx) return { fontPx, lines: twoLine };
+    fontPx -= 1;
+  }
+}
+
+function makeAmbientSplash(name, x, y, R) {
+  const grad = pick(AMBIENT_GRADS);
+  return {
+    name, x, y, R, grad, verts: buildVerts(60),
+    born: performance.now(), outAt: 0,
+    holdMs: rand(2500, 4000),
+    targetAlpha: rand(0.5, 0.65),
+    state: 'IN',
+  };
+}
+function updateAmbient(s, now) {
+  if (s.state === 'STATIC') return;
+  const age = now - s.born;
+  if (s.state === 'IN' && age >= AMBIENT_FADE_IN_MS) s.state = 'HOLD';
+  else if (s.state === 'HOLD' && age >= AMBIENT_FADE_IN_MS + s.holdMs) { s.state = 'OUT'; s.outAt = now; }
+  else if (s.state === 'OUT' && now - s.outAt >= AMBIENT_FADE_OUT_MS) s.state = 'DEAD';
+}
+function ambientAlpha(s, now) {
+  if (s.state === 'STATIC') return s.targetAlpha;
+  const age = now - s.born;
+  if (s.state === 'IN') return s.targetAlpha * Math.min(1, age / AMBIENT_FADE_IN_MS);
+  if (s.state === 'HOLD') return s.targetAlpha;
+  if (s.state === 'OUT') return s.targetAlpha * Math.max(0, 1 - (now - s.outAt) / AMBIENT_FADE_OUT_MS);
+  return 0;
+}
+// No outer glow, no blur — that's what would push these back and blur the
+// name. Flat gradient fill only.
+function drawAmbient(c, s, now) {
+  const alpha = ambientAlpha(s, now);
+  if (alpha <= 0.01) return;
+  c.save();
+  c.globalAlpha = alpha;
+  c.beginPath();
+  const N = s.verts.length;
+  for (let i = 0; i < N; i++) {
+    const v = s.verts[i];
+    const rr = s.R * v.r;
+    const x = s.x + Math.cos(v.a) * rr, y = s.y + Math.sin(v.a) * rr;
+    if (i === 0) c.moveTo(x, y); else c.lineTo(x, y);
+  }
+  c.closePath();
+  const g = c.createLinearGradient(s.x - s.R, s.y - s.R, s.x + s.R, s.y + s.R);
+  g.addColorStop(0, s.grad[0]); g.addColorStop(1, s.grad[1]);
+  c.fillStyle = g;
+  c.fill();
+
+  const fit = fitAmbientText(c, s.name, s.R);
+  c.fillStyle = inkOn(s.grad[0], s.grad[1]);
+  c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.font = heavyFont(fit.fontPx);
+  const lineH = fit.fontPx * 1.15;
+  const y0 = s.y - (fit.lines.length - 1) * lineH / 2;
+  fit.lines.forEach((l, i) => c.fillText(l, s.x, y0 + i * lineH));
+  c.restore();
+}
+
+function bootAmbientSplashes() {
+  let vw = 0, vh = 0;
+
+  function resizeAmbient() {
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    vw = window.innerWidth; vh = window.innerHeight;
+    ambientCanvas.width = vw * dpr; ambientCanvas.height = vh * dpr;
+    ambientCanvas.style.width = vw + 'px'; ambientCanvas.style.height = vh + 'px';
+    ambientCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  resizeAmbient();
+  window.addEventListener('resize', resizeAmbient);
+
+  function trySpawn(now) {
+    const alive = ambientSplashes.filter(s => s.state !== 'DEAD');
+    if (alive.length >= ambientCap()) return;
+    if (now - ambientLastSpawnAt < ambientNextSpawnGap) return;
+    ambientLastSpawnAt = now;
+    ambientNextSpawnGap = rand(500, 900); // stagger so pops don't read as one pulse
+    const name = nextAmbientName(new Set(alive.map(s => s.name)));
+    if (!name) return;
+    const [minSize, maxSize] = ambientSizeRange();
+    const R = rand(minSize, maxSize) / 2;
+    const pos = findAmbientPlacement(R, ambientExclusionRects(), alive, vw, vh);
+    if (!pos) return;
+    ambientSplashes.push(makeAmbientSplash(name, pos.x, pos.y, R));
+  }
+
+  function buildStatic() {
+    if (ambientStaticBuilt) return;
+    ambientStaticBuilt = true;
+    const names = shuffleArray(AXES.map(a => a.title)).slice(0, 3);
+    const [minSize, maxSize] = ambientSizeRange();
+    for (const name of names) {
+      const R = rand(minSize, maxSize) / 2;
+      const pos = findAmbientPlacement(R, ambientExclusionRects(), ambientSplashes, vw, vh);
+      if (pos) {
+        const s = makeAmbientSplash(name, pos.x, pos.y, R);
+        s.state = 'STATIC';
+        ambientSplashes.push(s);
+      }
+    }
+  }
+
+  function loop(now) {
+    ambientCtx.clearRect(0, 0, vw, vh);
+    if (REDUCED) {
+      buildStatic();
+    } else {
+      trySpawn(now);
+      for (const s of ambientSplashes) updateAmbient(s, now);
+      ambientSplashes = ambientSplashes.filter(s => s.state !== 'DEAD');
+    }
+    for (const s of ambientSplashes) drawAmbient(ambientCtx, s, now);
+    ambientRaf = requestAnimationFrame(loop);
+  }
+  ambientRaf = requestAnimationFrame(loop);
+
+  document.addEventListener('visibilitychange', () => {
+    if (!introShowing) return;
+    if (document.hidden) { if (ambientRaf) { cancelAnimationFrame(ambientRaf); ambientRaf = null; } }
+    else if (!ambientRaf) { ambientRaf = requestAnimationFrame(loop); }
+  });
+
+  // Tapping any ambient splash enters the wall — it never filters by bundle,
+  // the axes aren't filterable (§3 "Interaction").
+  ambientCanvas.addEventListener('pointerdown', e => {
+    if (!introShowing) return;
+    const hit = ambientSplashes.find(s => s.state !== 'DEAD' && Math.hypot(e.clientX - s.x, e.clientY - s.y) <= s.R);
+    if (hit) dismissIntro();
+  });
 }
 
 // Live splash count (§1.3) — the span already carries the build-time
@@ -1732,6 +1959,7 @@ function dismissIntro() {
   introShowing = false;
   document.getElementById('intro').classList.add('hide');
   if (introRaf) cancelAnimationFrame(introRaf);
+  if (ambientRaf) cancelAnimationFrame(ambientRaf);
   track('action_completed', { action: 'enter-wall' });
   track('wall_enter', {});
   gaEvent('wall_enter', {});
@@ -1770,6 +1998,7 @@ function boot() {
   ensureSlots();
   startLoop();
   bootIntroDemo();
+  bootAmbientSplashes();
   loadIntroStats();
 }
 window.addEventListener('resize', () => {

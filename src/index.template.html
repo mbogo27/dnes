@@ -144,36 +144,51 @@
   .p-success p{font-size:12.5px;opacity:.75;line-height:1.6;margin:0 0 12px;}
   .p-success .field,.p-success .p-note,.p-success .p-cta{text-align:left;}
 
-  /* ---------- intro screen (revision-spec §1) ---------- */
+  /* ---------- intro screen (revision-spec §1, patched v2.1) ---------- */
   #intro{
     position:fixed;inset:0;z-index:100;background:var(--ink);display:flex;flex-direction:column;
     align-items:center;overflow-y:auto;
-    padding:28px max(20px,env(safe-area-inset-left)) max(28px,env(safe-area-inset-bottom));
+    padding:24px max(20px,env(safe-area-inset-left)) max(24px,env(safe-area-inset-bottom));
     transition:opacity .35s,transform .35s;
   }
   #intro.hide{opacity:0;transform:scale(1.02);pointer-events:none;}
-  .intro-inner{width:100%;max-width:1200px;margin:auto 0;display:flex;flex-direction:column;align-items:center;}
-  .intro-splash-box{width:280px;height:280px;margin-bottom:18px;overflow:visible;}
-  @media (min-width:720px){ .intro-splash-box{width:540px;height:540px;} }
+  /* Full-cover, behind .intro-inner — the "text column" only occupies its
+     own measure (below), so the margins either side and above stay
+     transparent and pass taps through to whatever ambient splash is there. */
+  #intro-ambient-canvas{position:fixed;inset:0;z-index:0;touch-action:none;}
+  .intro-inner{
+    position:relative;z-index:1;width:100%;max-width:600px;margin:auto 0;
+    display:flex;flex-direction:column;align-items:center;
+  }
+  .intro-splash-box{width:150px;height:150px;margin-bottom:32px;overflow:visible;}
+  @media (min-width:720px){ .intro-splash-box{width:220px;height:220px;margin-bottom:48px;} }
   #intro-canvas{width:100%;height:100%;display:block;overflow:visible;}
-  .intro-logo{font-family:var(--font-heavy);font-weight:800;font-size:32px;letter-spacing:.03em;margin:0 0 10px;text-align:center;}
-  @media (min-width:720px){ .intro-logo{font-size:44px;} }
+  .intro-logo{font-family:var(--font-heavy);font-weight:800;font-size:32px;letter-spacing:.03em;margin:0 0 16px;text-align:center;}
+  @media (min-width:720px){ .intro-logo{font-size:44px;margin-bottom:20px;} }
   /* "60ch, centred" is a desktop measure; mobile paragraphs run full width */
-  .intro-tagline{font-size:17px;font-weight:400;line-height:1.5;opacity:.88;width:100%;text-align:center;margin:0 0 10px;}
-  .intro-status{font-size:15px;font-weight:600;line-height:1.5;opacity:.85;width:100%;text-align:center;margin:0 0 20px;}
-  .intro-interactions{display:flex;flex-direction:column;gap:10px;margin:4px 0 22px;}
+  .intro-tagline{font-size:17px;font-weight:400;line-height:1.5;opacity:.88;width:100%;text-align:center;margin:0 0 16px;}
+  .intro-status{font-size:15px;font-weight:600;line-height:1.5;opacity:.85;width:100%;text-align:center;margin:0 0 16px;}
+  .intro-interactions{display:flex;flex-direction:column;gap:10px;margin:0 0 16px;}
   .intro-interaction-line{display:flex;align-items:flex-start;gap:10px;font-size:15px;font-weight:400;line-height:1.4;}
   #intro-enter{
     font-family:var(--font-ui);font-size:13px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
     color:#fff;border:none;cursor:pointer;border-radius:99px;padding:15px 32px;
     background:linear-gradient(120deg,#FF4D2E,#FF9A3D);box-shadow:0 4px 16px rgba(255,77,46,.4);
   }
-  .intro-privacy{font-size:13px;font-weight:400;line-height:1.6;opacity:.55;width:100%;text-align:center;margin:18px 0 0;}
+  /* Native <details> — a tappable line that expands, zero JS (§2) */
+  .intro-privacy{width:100%;text-align:center;margin-top:14px;}
+  .intro-privacy summary{
+    font-size:13px;font-weight:600;opacity:.6;cursor:pointer;list-style:none;
+    display:inline-block;text-decoration:underline;text-underline-offset:2px;
+  }
+  .intro-privacy summary::-webkit-details-marker{display:none;}
+  .intro-privacy p{font-size:12.5px;line-height:1.6;opacity:.6;margin:8px 0 0;text-align:center;}
   @media (min-width:720px){
-    .intro-tagline{font-size:20px;max-width:60ch;}
-    .intro-status{font-size:18px;max-width:60ch;}
+    .intro-tagline{font-size:20px;}
+    .intro-status{font-size:18px;}
     .intro-interaction-line{font-size:16px;}
-    .intro-privacy{font-size:14px;max-width:60ch;}
+    .intro-privacy summary{font-size:14px;}
+    .intro-privacy p{font-size:13px;}
   }
 
   @media (prefers-reduced-motion:reduce){
@@ -207,6 +222,7 @@
 <aside id="panel" role="dialog" aria-modal="true" aria-hidden="true"></aside>
 
 <div id="intro" role="dialog" aria-modal="true" aria-label="Welcome to Dobaness">
+  <canvas id="intro-ambient-canvas" aria-hidden="true"></canvas>
   <div class="intro-inner">
     <div class="intro-splash-box"><canvas id="intro-canvas" aria-hidden="true"></canvas></div>
     <h1 class="intro-logo">DOBANESS</h1>
@@ -218,7 +234,10 @@
       <div class="intro-interaction-line"><span aria-hidden="true">🟠</span><span>Brand? Claim a slot</span></div>
     </div>
     <button id="intro-enter">Enter the wall</button>
-    <p class="intro-privacy">Handles shown as collected, or anonymised. We ask for a WhatsApp number only if you claim a name or a slot. Never shared, deleted on request.</p>
+    <details class="intro-privacy">
+      <summary>How we handle your info</summary>
+      <p>Handles shown as collected, or anonymised. We ask for a WhatsApp number only if you claim a name or a slot. Never shared, deleted on request.</p>
+    </details>
   </div>
 </div>
 
