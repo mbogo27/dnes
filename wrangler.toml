@@ -16,8 +16,8 @@ SEED_COUNT = "37"
 [[d1_databases]]
 binding = "DB"
 database_name = "dobaness"
-database_id = "local-dev-db"
+database_id = "b1b52b2d-63aa-4242-8ce5-08369fab846b"
 
 [[kv_namespaces]]
 binding = "BLOCKLIST"
-id = "local-dev-kv"
+id = "f539916b6a814ea0964a126188e50886"
