@@ -1,0 +1,17 @@
+{
+  "name": "dobaness",
+  "version": "0.1.0",
+  "private": true,
+  "description": "DOBANESS — a wall of Kenyan comments. MVP, local testing build.",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build-seed.mjs",
+    "dev": "npm run build && wrangler pages dev public --local --port 8788",
+    "db:init": "wrangler d1 execute DB --local --file=schema/0001_init.sql",
+    "kv:seed": "node scripts/seed-kv.mjs",
+    "curate": "node scripts/curate.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}
