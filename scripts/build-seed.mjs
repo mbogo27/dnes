@@ -28,7 +28,11 @@ mkdirSync(join(root, 'public'), { recursive: true });
 writeFileSync(join(root, 'public', 'index.html'), injected);
 copyFileSync(join(root, 'src', 'assets', 'dobaness-bg.jpg'), join(root, 'public', 'dobaness-bg.jpg'));
 copyFileSync(join(root, 'src', 'assets', 'taskbee-ecom-banner.webp'), join(root, 'public', 'taskbee-ecom-banner.webp'));
+for (const moji of ['moji-kim.jpg', 'moji-klish.jpg', 'moji-diticha.jpg']) {
+  copyFileSync(join(root, 'src', 'assets', moji), join(root, 'public', moji));
+}
 
 console.log(`build-seed: inlined ${posts.length} posts -> public/index.html (${injected.length} bytes)`);
 console.log('build-seed: copied dobaness-bg.jpg -> public/');
 console.log('build-seed: copied taskbee-ecom-banner.webp -> public/');
+console.log('build-seed: copied moji-kim.jpg, moji-klish.jpg, moji-diticha.jpg -> public/');

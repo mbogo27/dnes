@@ -156,6 +156,16 @@ function makeSlot(shape, pal, card) {
       '<p class="joke">' + esc(card.joke) + '</p>' + extra;
   }
   el.appendChild(p);
+
+  if (card.moji && MOJI[card.moji]) {
+    const m = document.createElement('div');
+    m.className = 'mojicon';
+    m.style.cssText = 'left:' + (b.cx + b.w / 2 - 9).toFixed(2) + '%;top:' + (b.cy - b.h / 2 - 9).toFixed(2) +
+      '%;transform:rotate(-7deg)';
+    m.innerHTML = '<img src="' + MOJI[card.moji] + '" alt="">';
+    el.appendChild(m);
+  }
+
   s.appendChild(el);
 
   if (card.kind === 'sponsor' || card.kind === 'callout') {
@@ -180,13 +190,20 @@ function fitText(el) {
    CONTENT MODEL — real seed posts mapped to the card shape, plus
    in-feed sponsor (Taskbee) and callout ("your turn") cards.
 --------------------------------------------------------------------- */
+const MOJI = {
+  kim: '/moji-kim.jpg',
+  klish: '/moji-klish.jpg',
+  diticha: '/moji-diticha.jpg',
+};
+
 const POSTS = SEED_POSTS.map(p => ({
   id: p.id,
   axisCode: p.axis,
   axis: p.origin || (AXIS_BY_KEY[p.axis] || {}).title || p.axis,
   joke: p.body,
   spotter: p.handle,
-  setup: '',
+  setup: p.setup || '',
+  moji: p.moji || null,
   kind: 'post',
   mine: null,
 }));
@@ -231,7 +248,8 @@ function buildFeed() {
 /* ---------------------------------------------------------------------
    THE WALL — one card at a time, auto-advancing
 --------------------------------------------------------------------- */
-const HOLD = 4200;
+const HOLD = 6000;
+const HOLD_ARM_MS = 180;
 const wallEl = document.getElementById('wall');
 const stageEl = document.getElementById('stage');
 const reactionsEl = document.getElementById('reactions');
@@ -245,15 +263,45 @@ let feed = [];
 let i = -1, shapeN = 0, palN = 0, slot = null, timer = null;
 let currentCard = null, currentPal = null, currentShape = null, cardBorn = 0;
 let introShowing = true;
+let timerStartedAt = 0, holdArmTimer = null, isHeld = false, pausedRemaining = 0, suppressClick = false;
 
 function restartTimer() {
   clearTimeout(timer);
-  timerEl.classList.remove('run'); void timerEl.offsetWidth;
+  timerEl.classList.remove('run', 'paused'); void timerEl.offsetWidth;
   if (panelOpen || introShowing) return;
   timerEl.classList.add('run');
+  timerStartedAt = performance.now();
   timer = setTimeout(() => advance(false), HOLD);
 }
-function pauseTimer() { clearTimeout(timer); timerEl.classList.remove('run'); }
+function pauseTimer() { clearTimeout(timer); clearTimeout(holdArmTimer); isHeld = false; timerEl.classList.remove('run', 'paused'); }
+
+// Press-and-hold pauses the card in place (like a story); a quick tap still
+// advances via the normal click handler below.
+function beginHoldWatch(e) {
+  if (panelOpen || introShowing) return;
+  if (!currentCard || currentCard.kind !== 'post') return;
+  if (e.target.closest('button')) return;
+  clearTimeout(holdArmTimer);
+  holdArmTimer = setTimeout(() => {
+    isHeld = true;
+    clearTimeout(timer);
+    pausedRemaining = Math.max(0, HOLD - (performance.now() - timerStartedAt));
+    timerEl.classList.add('paused');
+  }, HOLD_ARM_MS);
+}
+function endHoldWatch() {
+  clearTimeout(holdArmTimer);
+  if (!isHeld) return;
+  isHeld = false;
+  suppressClick = true;
+  timerEl.classList.remove('paused');
+  timerStartedAt = performance.now();
+  timer = setTimeout(() => advance(false), pausedRemaining);
+}
+wallEl.addEventListener('pointerdown', beginHoldWatch);
+wallEl.addEventListener('pointerup', endHoldWatch);
+wallEl.addEventListener('pointercancel', endHoldWatch);
+wallEl.addEventListener('pointerleave', endHoldWatch);
 
 function advance(manual) {
   if (currentCard && currentCard.kind !== 'intro') {
@@ -278,13 +326,16 @@ function showCard(card) {
   currentCard = card; currentPal = pal; currentShape = shape;
   cardBorn = performance.now();
 
-  if (card.setup) { setupEl.innerHTML = 'This landed <b>' + esc(card.setup) + '</b>.'; setupEl.classList.remove('blank'); }
+  if (card.setup) { setupEl.innerHTML = 'This landed under: <b>' + esc(card.setup) + '</b>'; setupEl.classList.remove('blank'); }
   else setupEl.classList.add('blank');
 
   renderActions(card, pal);
-  countEl.textContent = pad(i + 1) + ' / ' + pad(feed.length);
+  // Count only real posts, not the sponsor/callout cards interleaved into
+  // the feed — the header number should match the intro's "N splashes up".
+  const postsShown = feed.slice(0, i + 1).filter(c => c.kind === 'post').length;
+  countEl.textContent = pad(postsShown) + ' / ' + pad(POSTS.length);
   timerEl.style.background = pal.fill;
-  tapHint.textContent = card.kind === 'post' ? 'Tap the wall for the next splash' : 'Tap the splash to open it';
+  tapHint.textContent = card.kind === 'post' ? 'Tap for the next splash · Hold to pause' : 'Tap the splash to open it';
 
   if (card.kind === 'post') track('splash_shown', { post_id: card.id, axis: card.axisCode, tier: TIER });
   restartTimer();
@@ -337,6 +388,7 @@ function renderActions(card, pal) {
 }
 
 wallEl.addEventListener('click', () => {
+  if (suppressClick) { suppressClick = false; return; }
   if (panelOpen) return;
   if (introShowing) return;
   advance(true);
@@ -918,10 +970,18 @@ if (new URLSearchParams(location.search).get('claim') === '1') {
    decorative blob rendered through the same shapeSVG() path as the wall.
 --------------------------------------------------------------------- */
 const introStageEl = document.getElementById('introStage');
+const INTRO_CYCLE_MS = 2700;
+let introShapeN = 3, introPalN = 0, introCycleTimer = null;
 
-function showIntro() {
-  const shape = SHAPES[3 % SHAPES.length];
-  const pal = { fill: '#E85568', text: '#FFFFFF' };
+function cycleIntroShape() {
+  const shape = SHAPES[(introShapeN++) % SHAPES.length];
+  const pal = PALETTE[(introPalN++) % PALETTE.length];
+  const old = introStageEl.querySelector('.layer');
+  if (old) {
+    old.classList.remove('in');
+    old.classList.add('out');
+    setTimeout(() => { if (old.parentNode) old.remove(); }, 450);
+  }
   const id = ++uid;
   const g = shapeSVG(shape, pal, true, id, true);
   const wrap = document.createElement('div');
@@ -932,6 +992,11 @@ function showIntro() {
   wrap.innerHTML = '<svg class="shape" viewBox="0 0 100 100" aria-hidden="true">' +
     (g.defs ? '<defs>' + g.defs + '</defs>' : '') + g.inner + '</svg>';
   introStageEl.appendChild(wrap);
+}
+function showIntro() {
+  cycleIntroShape();
+  clearInterval(introCycleTimer);
+  introCycleTimer = setInterval(cycleIntroShape, INTRO_CYCLE_MS);
 }
 introStageEl.addEventListener('click', () => dismissIntro());
 
@@ -953,6 +1018,7 @@ async function loadIntroStats() {
 function dismissIntro() {
   if (!introShowing) return;
   introShowing = false;
+  clearInterval(introCycleTimer);
   document.getElementById('intro').classList.add('hide');
   track('action_completed', { action: 'enter-wall' });
   track('wall_enter', {});
